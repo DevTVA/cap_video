@@ -1,0 +1,27 @@
+# Environment variables
+.env
+
+# Python compilation files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Input/Output video folders
+input/
+output/
+
+# Logs
+*.log
+reels_processor.log
+
+# Temporary test images and videos
+frame_*.jpg
+frame_*.png
+colorkey_test.mp4
+output_colorkey_overlay.mp4
+*.mp4
+*.webm
+*.wav
+*.srt
+!mau.mp4

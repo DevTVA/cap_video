@@ -1,0 +1,9 @@
+openai-whisper
+librosa
+numpy
+soundfile
+google-generativeai
+openai
+python-dotenv
+tqdm
+click
