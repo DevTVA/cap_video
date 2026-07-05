@@ -906,30 +906,32 @@ def main(input_dir, output_dir, outcard, whisper_model, device, segment_duration
         logger.warning(f"Thất bại: {fail_count}/{len(video_tasks)}")
     logger.info("========================================")
     
-    # Ghi file captions.txt tổng hợp vào thư mục output và thư mục backup trên ổ E
-    captions_content = ""
+    # Ghi file captions.txt tổng hợp vào thư mục output và thư mục backup trên ổ E (sử dụng chế độ append 'a' để lưu lại lịch sử)
+    import datetime
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    captions_content = f"=== Phiên làm việc: {now_str} ===\n"
     for idx, (video_name, caption) in enumerate(results, 1):
         clean_caption = caption.replace("\n", " ") if caption else ""
-        captions_content += f"STT: {idx}\nTên video: {video_name}\nCaption: {clean_caption}\n\n"
+        captions_content += f"STT: {idx}\nTên video: {video_name}\nCaption: {clean_caption}\n"
+    captions_content += "\n"
         
-    # Ghi vào thư mục output
+    # Ghi vào thư mục output (chế độ append)
     output_captions_path = output_path / "captions.txt"
     try:
-        with open(output_captions_path, "w", encoding="utf-8") as f:
+        with open(output_captions_path, "a", encoding="utf-8") as f:
             f.write(captions_content)
-        logger.info(f"Đã lưu danh sách caption tổng hợp tại: {output_captions_path}")
+        logger.info(f"Đã lưu/gộp danh sách caption tổng hợp tại: {output_captions_path}")
     except Exception as e:
         logger.error(f"Lỗi khi lưu file captions.txt tổng hợp: {e}")
         
-    # Ghi vào thư mục backup trên ổ E
-    import datetime
+    # Ghi vào thư mục backup trên ổ E (chế độ append)
     backup_base = Path("E:/cap_video_backup")
     today_str = datetime.date.today().strftime("%Y-%m-%d")
     today_backup_dir = backup_base / today_str
     if today_backup_dir.exists():
         backup_captions_path = today_backup_dir / "captions.txt"
         try:
-            with open(backup_captions_path, "w", encoding="utf-8") as f:
+            with open(backup_captions_path, "a", encoding="utf-8") as f:
                 f.write(captions_content)
             logger.info(f"Đã backup danh sách caption tổng hợp tại: {backup_captions_path}")
         except Exception as e:
