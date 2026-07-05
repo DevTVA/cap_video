@@ -773,19 +773,14 @@ def process_single_video(video_path, output_dir, outcard_path, whisper_model, de
             if transcript:
                 caption = generate_ai_caption(transcript, provider=api_provider, api_key=api_key)
             
-            # Lưu caption ra file txt tương ứng
-            caption_file_path = output_dir / f"{final_name}.txt"
             final_caption = caption if caption else "Check out this amazing video! #viral #reels"
-            with open(caption_file_path, "w", encoding="utf-8") as f:
-                f.write(final_caption)
-                
-            logger.info(f"Caption đã lưu: {final_caption}")
+            
+            logger.info(f"Caption: {final_caption}")
             logger.info(f">>> HOÀN THÀNH XỬ LÝ VIDEO: {video_path.name}")
             logger.info(f">>> File kết quả: {final_video_path}")
-            logger.info(f">>> File caption: {caption_file_path}")
             
-            # Thực hiện sao lưu dữ liệu và dọn dẹp các thư mục backup cũ hơn 3 ngày trên ổ E
-            backup_and_cleanup_files(final_video_path, caption_file_path)
+            # Thực hiện sao lưu dữ liệu và dọn dẹp các thư mục backup cũ hơn 3 ngày trên ổ E (không backup file txt riêng lẻ)
+            backup_and_cleanup_files(final_video_path, None)
             
             return True, final_caption
             
@@ -911,17 +906,46 @@ def main(input_dir, output_dir, outcard, whisper_model, device, segment_duration
         logger.warning(f"Thất bại: {fail_count}/{len(video_tasks)}")
     logger.info("========================================")
     
+    # Ghi file captions.txt tổng hợp vào thư mục output và thư mục backup trên ổ E
+    captions_content = ""
+    for idx, (video_name, caption) in enumerate(results, 1):
+        clean_caption = caption.replace("\n", " ") if caption else ""
+        captions_content += f"STT: {idx}\nTên video: {video_name}\nCaption: {clean_caption}\n\n"
+        
+    # Ghi vào thư mục output
+    output_captions_path = output_path / "captions.txt"
+    try:
+        with open(output_captions_path, "w", encoding="utf-8") as f:
+            f.write(captions_content)
+        logger.info(f"Đã lưu danh sách caption tổng hợp tại: {output_captions_path}")
+    except Exception as e:
+        logger.error(f"Lỗi khi lưu file captions.txt tổng hợp: {e}")
+        
+    # Ghi vào thư mục backup trên ổ E
+    import datetime
+    backup_base = Path("E:/cap_video_backup")
+    today_str = datetime.date.today().strftime("%Y-%m-%d")
+    today_backup_dir = backup_base / today_str
+    if today_backup_dir.exists():
+        backup_captions_path = today_backup_dir / "captions.txt"
+        try:
+            with open(backup_captions_path, "w", encoding="utf-8") as f:
+                f.write(captions_content)
+            logger.info(f"Đã backup danh sách caption tổng hợp tại: {backup_captions_path}")
+        except Exception as e:
+            logger.error(f"Lỗi khi backup file captions.txt: {e}")
+
     # In bảng tổng hợp caption ở cuối CMD để người dùng dễ sao chép
     print("\n")
-    print("=" * 80)
-    print(" BẢNG TỔNG HỢP CAPTION VIDEO ".center(80, "="))
-    print("=" * 80)
-    print(f"{'TÊN VIDEO':<30} | {'CAPTION AI'}")
-    print("-" * 80)
-    for video_name, caption in results:
+    print("=" * 90)
+    print(" BẢNG TỔNG HỢP CAPTION VIDEO ".center(90, "="))
+    print("=" * 90)
+    print(f"{'STT':<5} | {'TÊN VIDEO':<30} | {'CAPTION AI'}")
+    print("-" * 90)
+    for idx, (video_name, caption) in enumerate(results, 1):
         clean_caption = caption.replace("\n", " ") if caption else ""
-        print(f"{video_name:<30} | {clean_caption}")
-    print("=" * 80)
+        print(f"{idx:<5} | {video_name:<30} | {clean_caption}")
+    print("=" * 90)
     print("\n")
 
 if __name__ == "__main__":
