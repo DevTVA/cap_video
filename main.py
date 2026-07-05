@@ -628,49 +628,45 @@ def generate_ai_caption(transcript, provider="gemini", api_key=None):
     logger.error("TẤT CẢ các API của tất cả nhà cung cấp được cấu hình đều thất bại.")
     return None
 
-def backup_and_cleanup_files(final_video_path, caption_file_path):
+def backup_and_cleanup_files(final_video_path, caption_file_path, session_name):
     """
-    Backup video và caption vào thư mục E:/cap_video_backup/<ngày_hôm_nay>/
+    Backup video và caption vào thư mục E:/cap_video_backup/<session_name>/
     và tự động xóa các thư mục backup cũ hơn 3 ngày trên ổ E.
     """
     import shutil
     import datetime
     
     backup_base = Path("E:/cap_video_backup")
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-    today_backup_dir = backup_base / today_str
+    session_backup_dir = backup_base / session_name
     
     try:
-        # 1. Tạo thư mục backup ngày hôm nay
-        today_backup_dir.mkdir(parents=True, exist_ok=True)
+        # 1. Tạo thư mục backup cho phiên làm việc này
+        session_backup_dir.mkdir(parents=True, exist_ok=True)
         
-        # Copy video và caption vào thư mục backup
+        # Copy video
         if final_video_path and os.path.exists(final_video_path):
-            shutil.copy2(final_video_path, today_backup_dir / final_video_path.name)
-            logger.info(f"Đã backup video sang: {today_backup_dir / final_video_path.name}")
-            
-        if caption_file_path and os.path.exists(caption_file_path):
-            shutil.copy2(caption_file_path, today_backup_dir / caption_file_path.name)
-            logger.info(f"Đã backup caption sang: {today_backup_dir / caption_file_path.name}")
+            shutil.copy2(final_video_path, session_backup_dir / final_video_path.name)
+            logger.info(f"Đã backup video sang: {session_backup_dir / final_video_path.name}")
             
         # 2. Quét và dọn dẹp các thư mục backup cũ hơn 3 ngày
         if backup_base.exists():
             for folder in backup_base.iterdir():
                 if folder.is_dir():
                     try:
-                        folder_date = datetime.datetime.strptime(folder.name, "%Y-%m-%d").date()
+                        # Lấy 10 ký tự đầu tiên để parse ngày YYYY-MM-DD
+                        folder_date = datetime.datetime.strptime(folder.name[:10], "%Y-%m-%d").date()
                         days_diff = (datetime.date.today() - folder_date).days
                         if days_diff >= 3:
                             logger.info(f"Phát hiện thư mục backup cũ ({days_diff} ngày trước): {folder.name}. Đang xóa tự động...")
                             shutil.rmtree(folder)
                     except ValueError:
-                        # Bỏ qua nếu tên thư mục không phải định dạng YYYY-MM-DD
+                        # Bỏ qua nếu tên thư mục không chứa định dạng ngày hợp lệ ở đầu
                         continue
                         
     except Exception as e:
         logger.error(f"Lỗi trong quá trình backup và dọn dẹp dữ liệu: {e}")
 
-def process_single_video(video_path, output_dir, outcard_path, whisper_model, device, segment_duration, api_provider, api_key, output_name=None):
+def process_single_video(video_path, output_dir, outcard_path, whisper_model, device, segment_duration, api_provider, api_key, session_name, output_name=None):
     """Hàm xử lý một video duy nhất, đóng gói try-except để không làm crash cả batch."""
     video_name = video_path.stem
     final_name = output_name if output_name else video_name
@@ -780,7 +776,7 @@ def process_single_video(video_path, output_dir, outcard_path, whisper_model, de
             logger.info(f">>> File kết quả: {final_video_path}")
             
             # Thực hiện sao lưu dữ liệu và dọn dẹp các thư mục backup cũ hơn 3 ngày trên ổ E (không backup file txt riêng lẻ)
-            backup_and_cleanup_files(final_video_path, None)
+            backup_and_cleanup_files(final_video_path, None, session_name)
             
             return True, final_caption
             
@@ -811,18 +807,22 @@ def main(input_dir, output_dir, outcard, whisper_model, device, segment_duration
         logger.error("Độ dài phân đoạn cắt viral phải nằm trong khoảng 30 đến 45 giây.")
         sys.exit(1)
 
+    import datetime
+    session_name = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    
     input_path = Path(input_dir)
-    output_path = Path(output_dir)
+    output_root = Path(output_dir)
+    session_output_path = output_root / session_name
     outcard_path = Path(outcard)
     
     # Tạo các thư mục nếu chưa tồn tại
     input_path.mkdir(parents=True, exist_ok=True)
-    output_path.mkdir(parents=True, exist_ok=True)
+    session_output_path.mkdir(parents=True, exist_ok=True)
     
-    # Quét các thư mục con trong input_path, loại trừ output_path
+    # Quét các thư mục con trong input_path, loại trừ output_root
     subdirs = [
         d for d in input_path.iterdir()
-        if d.is_dir() and d.resolve() != output_path.resolve()
+        if d.is_dir() and d.resolve() != output_root.resolve()
     ]
     
     valid_extensions = [".mp4", ".webm", ".mov", ".mkv"]
@@ -883,13 +883,14 @@ def main(input_dir, output_dir, outcard, whisper_model, device, segment_duration
     for video_file, out_name in tqdm(video_tasks, desc="Đang xử lý video hàng loạt"):
         success, caption = process_single_video(
             video_path=video_file,
-            output_dir=output_path,
+            output_dir=session_output_path,
             outcard_path=outcard_path,
             whisper_model=whisper_model,
             device=device,
             segment_duration=segment_duration,
             api_provider=api_provider,
             api_key=api_key,
+            session_name=session_name,
             output_name=out_name
         )
         if success:
@@ -906,34 +907,30 @@ def main(input_dir, output_dir, outcard, whisper_model, device, segment_duration
         logger.warning(f"Thất bại: {fail_count}/{len(video_tasks)}")
     logger.info("========================================")
     
-    # Ghi file captions.txt tổng hợp vào thư mục output và thư mục backup trên ổ E (sử dụng chế độ append 'a' để lưu lại lịch sử)
-    import datetime
-    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    captions_content = f"=== Phiên làm việc: {now_str} ===\n"
+    # Ghi file captions.txt cho riêng phiên làm việc này
+    captions_content = ""
     for idx, (video_name, caption) in enumerate(results, 1):
         clean_caption = caption.replace("\n", " ") if caption else ""
-        captions_content += f"STT: {idx}\nTên video: {video_name}\nCaption: {clean_caption}\n"
-    captions_content += "\n"
+        captions_content += f"STT: {idx}\nTên video: {video_name}\nCaption: {clean_caption}\n\n"
         
-    # Ghi vào thư mục output (chế độ append)
-    output_captions_path = output_path / "captions.txt"
+    # Ghi vào thư mục session output
+    output_captions_path = session_output_path / "captions.txt"
     try:
-        with open(output_captions_path, "a", encoding="utf-8") as f:
+        with open(output_captions_path, "w", encoding="utf-8") as f:
             f.write(captions_content)
-        logger.info(f"Đã lưu/gộp danh sách caption tổng hợp tại: {output_captions_path}")
+        logger.info(f"Đã lưu danh sách caption của phiên này tại: {output_captions_path}")
     except Exception as e:
-        logger.error(f"Lỗi khi lưu file captions.txt tổng hợp: {e}")
+        logger.error(f"Lỗi khi lưu file captions.txt: {e}")
         
-    # Ghi vào thư mục backup trên ổ E (chế độ append)
+    # Ghi vào thư mục backup tương ứng trên ổ E
     backup_base = Path("E:/cap_video_backup")
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-    today_backup_dir = backup_base / today_str
-    if today_backup_dir.exists():
-        backup_captions_path = today_backup_dir / "captions.txt"
+    session_backup_dir = backup_base / session_name
+    if session_backup_dir.exists():
+        backup_captions_path = session_backup_dir / "captions.txt"
         try:
-            with open(backup_captions_path, "a", encoding="utf-8") as f:
+            with open(backup_captions_path, "w", encoding="utf-8") as f:
                 f.write(captions_content)
-            logger.info(f"Đã backup danh sách caption tổng hợp tại: {backup_captions_path}")
+            logger.info(f"Đã backup danh sách caption của phiên này tại: {backup_captions_path}")
         except Exception as e:
             logger.error(f"Lỗi khi backup file captions.txt: {e}")
 
