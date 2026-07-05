@@ -411,7 +411,7 @@ def render_final_video(main_video_path, outcard_path, srt_path, output_path, sta
     srt_path_esc = str(srt_path).replace("\\", "/").replace(":", "\\:")
     sub_filter = f",subtitles='{srt_path_esc}':force_style='{style}'" if has_srt else ""
     
-    # Bộ lọc xử lý video chính: Tạo nền mờ động (dynamic blurred background) và căn giữa video chính
+    # Bộ lọc xử lý video chính: Tạo nền mờ động (dynamic blurred background) và căn giữa video chính cho mọi tỷ lệ video
     main_v_label = "[main_v]" if has_outcard else "[v]"
     main_v_filter = (
         f"[0:v]split=2[bg][fg];"
